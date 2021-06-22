@@ -27,9 +27,9 @@ pub use frame_support::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 		DispatchClass, IdentityFee, Weight,
 	},
-	StorageValue,
+	StorageValue, PalletId
 };
-use frame_system::{EnsureRoot, limits::{BlockLength, BlockWeights}};
+use frame_system::{EnsureRoot, limits::{BlockLength, BlockWeights}, EnsureOneOf};
 use pallet_contracts::weights::WeightInfo;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
@@ -40,12 +40,14 @@ pub use sp_runtime::{Perbill, Permill};
 // XCM imports
 use xcm::v0::Xcm;
 use polkadot_parachain::primitives::Sibling;
-use xcm::v0::{Junction, MultiLocation, NetworkId, MultiAsset};
+use xcm::v0::{BodyId, Junction, MultiLocation, NetworkId, MultiAsset};
 use xcm_builder::{AccountId32Aliases, CurrencyAdapter, LocationInverter, ParentIsDefault, RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia, SignedAccountId32AsNative, SovereignSignedViaLocation, IsConcrete, NativeAsset, ParentAsSuperuser, TakeWeightCredit, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, FixedWeightBounds, FixedRateOfConcreteFungible, EnsureXcmOrigin};
 use xcm_executor::{
 	Config, XcmExecutor,
 };
 use frame_support::traits::{All, IsInVec};
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use pallet_xcm::{EnsureXcm, IsMajorityOfBody};
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -88,7 +90,9 @@ pub mod opaque {
 	pub type SessionHandlers = ();
 
 	impl_opaque_keys! {
-		pub struct SessionKeys {}
+		pub struct SessionKeys {
+			pub aura: Aura,
+		}
 	}
 }
 
@@ -280,7 +284,7 @@ parameter_types! {
 impl cumulus_pallet_parachain_system::Config for Runtime {
 	type Event = Event;
 	type OnValidationData = ();
-	type SelfParaId = parachain_info::Module<Runtime>;
+	type SelfParaId = parachain_info::Pallet<Runtime>;
 	// type DmpMessageHandler = cumulus_primitives_utility::UnqueuedDmpAsParent<
 	//     MaxDownwardMessageWeight,
 	//     XcmExecutor<XcmConfig>,
@@ -295,6 +299,8 @@ impl cumulus_pallet_parachain_system::Config for Runtime {
 }
 
 impl parachain_info::Config for Runtime {}
+
+impl cumulus_pallet_aura_ext::Config for Runtime {}
 
 parameter_types! {
 	pub const RococoLocation: MultiLocation = MultiLocation::X1(Junction::Parent);
@@ -470,6 +476,70 @@ impl pallet_contracts::Config for Runtime {
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
 
+parameter_types! {
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+	pub const Period: u32 = 6 * HOURS;
+	pub const Offset: u32 = 0;
+}
+
+impl pallet_session::Config for Runtime {
+	type Event = Event;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	// we don't have stash and controller, thus we don't need the convert as well.
+	type ValidatorIdOf = pallet_collator_selection::IdentityCollator;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type SessionManager = CollatorSelection;
+	// Essentially just Aura, but lets be pedantic.
+	type SessionHandler =
+	<opaque::SessionKeys as sp_runtime::traits::OpaqueKeys>::KeyTypeIdProviders;
+	type Keys = opaque::SessionKeys;
+	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type WeightInfo = pallet_session::weights::SubstrateWeight<Self>;
+}
+
+impl pallet_aura::Config for Runtime {
+	type AuthorityId = AuraId;
+}
+
+parameter_types! {
+	pub const UncleGenerations: u32 = 0;
+}
+
+impl pallet_authorship::Config for Runtime {
+	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = ();
+	type EventHandler = (CollatorSelection,);
+}
+
+parameter_types! {
+	pub const PotId: PalletId = PalletId(*b"PotStake");
+	pub const MaxCandidates: u32 = 1000;
+	pub const SessionLength: BlockNumber = 6 * HOURS;
+	pub const MaxInvulnerables: u32 = 100;
+	pub const ExecutiveBody: BodyId = BodyId::Executive;
+}
+
+/// We allow root and the Relay Chain council to execute privileged collator selection operations.
+pub type CollatorSelectionUpdateOrigin = EnsureOneOf<
+	AccountId,
+	EnsureRoot<AccountId>,
+	EnsureXcm<IsMajorityOfBody<RococoLocation, ExecutiveBody>>,
+>;
+
+impl pallet_collator_selection::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type UpdateOrigin = CollatorSelectionUpdateOrigin;
+	type PotId = PotId;
+	type MaxCandidates = MaxCandidates;
+	type MaxInvulnerables = MaxInvulnerables;
+	// should be a multiple of session or things will get inconsistent
+	type KickThreshold = Period;
+	type WeightInfo = pallet_collator_selection::weights::SubstrateWeight<Self>;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime where
@@ -483,14 +553,21 @@ construct_runtime!(
 		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
 		Sudo: pallet_sudo::{Pallet, Call, Storage, Config<T>, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Call, Storage},
-		ParachainSystem: cumulus_pallet_parachain_system::{Pallet, Call, Storage, Inherent, Event<T>},
+		ParachainSystem: cumulus_pallet_parachain_system::{Pallet, Call, Config, Storage, Inherent, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		ParachainInfo: parachain_info::{Pallet, Storage, Config},
+
+		Authorship: pallet_authorship::{Pallet, Call, Storage},
+		CollatorSelection: pallet_collator_selection::{Pallet, Call, Storage, Event<T>, Config<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Aura: pallet_aura::{Pallet, Storage, Config<T>},
+		AuraExt: cumulus_pallet_aura_ext::{Pallet, Storage, Config},
+
 		// XcmHandler: cumulus_pallet_xcm_handler::{Pallet, Call, Event<T>, Origin},
 		XcmpQueue: cumulus_pallet_xcmp_queue::{Pallet, Call, Storage, Event<T>},
         PolkadotXcm: pallet_xcm::{Pallet, Call, Event<T>, Origin},
         CumulusXcm: cumulus_pallet_xcm::{Pallet, Call, Origin, Event<T>},
-        Spambot: cumulus_ping::{Pallet, Call, Storage, Event<T>}
+        Spambot: cumulus_ping::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -527,6 +604,16 @@ pub type Executive = frame_executive::Executive<
 >;
 
 impl_runtime_apis! {
+	impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
+		fn slot_duration() -> sp_consensus_aura::SlotDuration {
+			sp_consensus_aura::SlotDuration::from_millis(Aura::slot_duration())
+		}
+
+		fn authorities() -> Vec<AuraId> {
+			Aura::authorities()
+		}
+	}
+
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
@@ -670,15 +757,28 @@ struct CheckInherents;
 
 impl cumulus_pallet_parachain_system::CheckInherents<Block> for CheckInherents {
 	fn check_inherents(
-		_: &Block,
-		_: &cumulus_pallet_parachain_system::RelayChainStateProof,
+		block: &Block,
+		relay_state_proof: &cumulus_pallet_parachain_system::RelayChainStateProof,
 	) -> sp_inherents::CheckInherentsResult {
-		sp_inherents::CheckInherentsResult::new()
+		// sp_inherents::CheckInherentsResult::new()
+		let relay_chain_slot = relay_state_proof
+			.read_slot()
+			.expect("Could not read the relay chain slot from the proof");
+
+		let inherent_data =
+			cumulus_primitives_timestamp::InherentDataProvider::from_relay_chain_slot_and_duration(
+				relay_chain_slot,
+				sp_std::time::Duration::from_secs(6),
+			)
+				.create_inherent_data()
+				.expect("Could not create the timestamp inherent data");
+
+		inherent_data.check_extrinsics(&block)
 	}
 }
 
 cumulus_pallet_parachain_system::register_validate_block! {
     Runtime = Runtime,
-    BlockExecutor = Executive,
+    BlockExecutor = cumulus_pallet_aura_ext::BlockExecutor::<Runtime, Executive>,
     CheckInherents = CheckInherents,
 }

@@ -14,6 +14,8 @@ serde = { version = "1.0.101", features = ["derive"] }
 structopt = "0.3.8"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 hex-literal = "0.2.1"
+futures = { version = "0.3.1", features = ["compat"] }
+async-trait = "0.1.42"
 
 # Substrate dependencies
 sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.5" }
@@ -42,6 +44,8 @@ sc-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v
 sc-tracing = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
 sp-offchain = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
 pallet-contracts = { git = "https://github.com/paritytech/substrate", package = "pallet-contracts" , branch = "polkadot-v0.9.5" }
+sp-consensus-aura = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
+#node-primitives = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.5" }
 
 # These dependencies are used for the node's RPCs
 jsonrpc-core = "15.1.0"
@@ -54,11 +58,13 @@ pallet-contracts-rpc = { git = "https://github.com/paritytech/substrate", packag
 # Cumulus dependencies
 cumulus-client-cli = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.5" }
 cumulus-client-consensus-relay-chain = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.5" }
+cumulus-client-consensus-aura = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.5" }
 cumulus-client-collator = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.5" }
 cumulus-client-service = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.5" }
 cumulus-client-network = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.5" }
 cumulus-primitives-core = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.5" }
 cumulus-primitives-parachain-inherent = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.5"}
+cumulus-client-consensus-common = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.5"}
 
 # Polkadot dependencies
 polkadot-primitives = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.5" }

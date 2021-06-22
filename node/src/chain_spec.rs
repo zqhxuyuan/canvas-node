@@ -4,11 +4,9 @@ use sc_service::ChainType;
 use serde::{Deserialize, Serialize};
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 
-use canvas_runtime::{
-	AccountId, BalancesConfig, GenesisConfig,
-	SudoConfig, SystemConfig, Signature,
-};
+use canvas_runtime::{AccountId, BalancesConfig, GenesisConfig, SudoConfig, SystemConfig, Signature, CollatorSelectionConfig, SessionConfig, Balance};
 
 /// Specialized `ChainSpec` for the normal parachain runtime.
 pub type ChainSpec = sc_service::GenericChainSpec<canvas_runtime::GenesisConfig, Extensions>;
@@ -19,6 +17,13 @@ pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Pu
 		.expect("static values are valid; qed")
 		.public()
 }
+
+pub const EXISTENTIAL_DEPOSIT: Balance = 10 * CENTS;
+
+pub const UNITS: Balance = 10_000_000_000;
+pub const DOLLARS: Balance = UNITS;
+pub const CENTS: Balance = UNITS / 100;        // 100_000_000
+pub const MILLICENTS: Balance = CENTS / 1_000; // 100_000
 
 /// The extensions for the [`ChainSpec`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension)]
@@ -47,6 +52,16 @@ pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
+pub fn get_pair_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+	TPublic::Pair::from_string(&format!("//{}", seed), None)
+		.expect("static values are valid; qed")
+		.public()
+}
+
+pub fn get_collator_keys_from_seed(seed: &str) -> AuraId {
+	get_pair_from_seed::<AuraId>(seed)
+}
+
 pub fn development_config(id: ParaId) -> Result<ChainSpec, String> {
 	Ok(ChainSpec::from_genesis(
 		"Development",
@@ -54,6 +69,19 @@ pub fn development_config(id: ParaId) -> Result<ChainSpec, String> {
 		ChainType::Development,
 		move || testnet_genesis(
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
+			vec![
+				get_from_seed::<AuraId>("Alice"),
+				get_from_seed::<AuraId>("Bob"),
+			],
+			vec![(
+					 get_account_id_from_seed::<sr25519::Public>("Alice"),
+					 get_collator_keys_from_seed("Alice")
+				 ),
+				 (
+					 get_account_id_from_seed::<sr25519::Public>("Bob"),
+					 get_collator_keys_from_seed("Bob")
+				 ),
+			],
 			vec![
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
 				get_account_id_from_seed::<sr25519::Public>("Bob"),
@@ -85,6 +113,19 @@ pub fn local_testnet_config(id: ParaId) -> ChainSpec {
 			testnet_genesis(
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
 				vec![
+					get_from_seed::<AuraId>("Alice"),
+					get_from_seed::<AuraId>("Bob"),
+				],
+				vec![(
+						 get_account_id_from_seed::<sr25519::Public>("Alice"),
+						 get_collator_keys_from_seed("Alice")
+					 ),
+					 (
+						 get_account_id_from_seed::<sr25519::Public>("Bob"),
+						 get_collator_keys_from_seed("Bob")
+					 ),
+				],
+				vec![
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
 					get_account_id_from_seed::<sr25519::Public>("Charlie"),
@@ -115,6 +156,8 @@ pub fn local_testnet_config(id: ParaId) -> ChainSpec {
 
 fn testnet_genesis(
 	root_key: AccountId,
+	initial_authorities: Vec<AuraId>,
+	invulnerables: Vec<(AccountId, AuraId)>,
 	endowed_accounts: Vec<AccountId>,
 	parachain_id: ParaId,
 	enable_println: bool
@@ -141,5 +184,28 @@ fn testnet_genesis(
 			// Assign network admin rights.
 			key: root_key,
 		},
+		collator_selection: CollatorSelectionConfig {
+			invulnerables: invulnerables.iter().cloned().map(|(acc, _)| acc).collect(),
+			candidacy_bond: EXISTENTIAL_DEPOSIT * 16,
+			..Default::default()
+		},
+		session: SessionConfig {
+			keys: invulnerables.iter().cloned().map(|(acc, aura)| (
+				acc.clone(), // account id
+				acc.clone(), // validator id
+				statemint_session_keys(aura), // session keys
+			)).collect()
+		},
+		// no need to pass anything to aura, in fact it will panic if we do. Session will take care of this.
+		aura: Default::default(),
+		// aura: AuraConfig {
+		// 	authorities: initial_authorities,
+		// },
+		aura_ext: Default::default(),
+		parachain_system: Default::default(),
 	}
+}
+
+pub fn statemint_session_keys(keys: AuraId) -> canvas_runtime::opaque::SessionKeys {
+	canvas_runtime::opaque::SessionKeys { aura: keys }
 }
