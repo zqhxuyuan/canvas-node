@@ -8,7 +8,6 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 use canvas_runtime::{
 	AccountId, BalancesConfig, GenesisConfig,
 	SudoConfig, SystemConfig, Signature,
-	ContractsConfig,
 };
 
 /// Specialized `ChainSpec` for the normal parachain runtime.
@@ -69,7 +68,7 @@ pub fn development_config(id: ParaId) -> Result<ChainSpec, String> {
 		None,
 		None,
 		Extensions {
-			relay_chain: "rococo-dev".into(),
+			relay_chain: "rococo-local".into(),
 			para_id: id.into(),
 		},
 	))
@@ -122,14 +121,14 @@ fn testnet_genesis(
 ) -> GenesisConfig {
 
 	GenesisConfig {
-		frame_system: SystemConfig {
+		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: canvas_runtime::WASM_BINARY
 				.expect("WASM binary was not build, please build it!")
 				.to_vec(),
 			changes_trie_config: Default::default(),
 		},
-		pallet_balances: BalancesConfig {
+		balances: BalancesConfig {
 			// Configure endowed accounts with initial balance of 1 << 60.
 			balances: endowed_accounts
 				.iter()
@@ -138,15 +137,9 @@ fn testnet_genesis(
 				.collect(),
 		},
 		parachain_info: canvas_runtime::ParachainInfoConfig { parachain_id },
-		pallet_sudo: SudoConfig {
+		sudo: SudoConfig {
 			// Assign network admin rights.
 			key: root_key,
-		},
-		pallet_contracts: ContractsConfig {
-			current_schedule: pallet_contracts::Schedule {
-				enable_println,
-				..Default::default()
-			},
 		},
 	}
 }
