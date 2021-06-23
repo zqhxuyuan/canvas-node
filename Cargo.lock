@@ -789,6 +789,7 @@ dependencies = [
  "sc-cli",
  "sc-client-api",
  "sc-consensus",
+ "sc-consensus-aura",
  "sc-executor",
  "sc-finality-grandpa",
  "sc-network",

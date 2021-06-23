@@ -478,7 +478,7 @@ impl pallet_randomness_collective_flip::Config for Runtime {}
 
 parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
-	pub const Period: u32 = 6 * HOURS;
+	pub const Period: u32 = 2 * MINUTES;
 	pub const Offset: u32 = 0;
 }
 

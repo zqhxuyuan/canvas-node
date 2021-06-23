@@ -3,7 +3,7 @@ use sc_chain_spec::{ChainSpecExtension, ChainSpecGroup};
 use sc_service::ChainType;
 use serde::{Deserialize, Serialize};
 use sp_core::{sr25519, Pair, Public};
-use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::traits::{IdentifyAccount, Verify, Zero};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 
 use canvas_runtime::{AccountId, BalancesConfig, GenesisConfig, SudoConfig, SystemConfig, Signature, CollatorSelectionConfig, SessionConfig, Balance};
@@ -19,7 +19,6 @@ pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Pu
 }
 
 pub const EXISTENTIAL_DEPOSIT: Balance = 10 * CENTS;
-
 pub const UNITS: Balance = 10_000_000_000;
 pub const DOLLARS: Balance = UNITS;
 pub const CENTS: Balance = UNITS / 100;        // 100_000_000
@@ -62,7 +61,7 @@ pub fn get_collator_keys_from_seed(seed: &str) -> AuraId {
 	get_pair_from_seed::<AuraId>(seed)
 }
 
-pub fn development_config(id: ParaId) -> Result<ChainSpec, String> {
+pub fn development_config(id: ParaId, relay: &str) -> Result<ChainSpec, String> {
 	Ok(ChainSpec::from_genesis(
 		"Development",
 		"dev",
@@ -71,16 +70,11 @@ pub fn development_config(id: ParaId) -> Result<ChainSpec, String> {
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
 			vec![
 				get_from_seed::<AuraId>("Alice"),
-				get_from_seed::<AuraId>("Bob"),
 			],
 			vec![(
 					 get_account_id_from_seed::<sr25519::Public>("Alice"),
 					 get_collator_keys_from_seed("Alice")
-				 ),
-				 (
-					 get_account_id_from_seed::<sr25519::Public>("Bob"),
-					 get_collator_keys_from_seed("Bob")
-				 ),
+				 )
 			],
 			vec![
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -96,13 +90,13 @@ pub fn development_config(id: ParaId) -> Result<ChainSpec, String> {
 		None,
 		None,
 		Extensions {
-			relay_chain: "rococo-local".into(),
+			relay_chain: relay.into(),
 			para_id: id.into(),
 		},
 	))
 }
 
-pub fn local_testnet_config(id: ParaId) -> ChainSpec {
+pub fn local_testnet_config(id: ParaId, relay_chain: &str) -> ChainSpec {
 	ChainSpec::from_genesis(
 		// Name
 		"Local Testnet",
@@ -148,7 +142,7 @@ pub fn local_testnet_config(id: ParaId) -> ChainSpec {
 		None,
 		None,
 		Extensions {
-			relay_chain: "rococo-local".into(),
+			relay_chain: relay_chain.into(),
 			para_id: id.into(),
 		},
 	)
@@ -186,7 +180,7 @@ fn testnet_genesis(
 		},
 		collator_selection: CollatorSelectionConfig {
 			invulnerables: invulnerables.iter().cloned().map(|(acc, _)| acc).collect(),
-			candidacy_bond: EXISTENTIAL_DEPOSIT * 16,
+			candidacy_bond: Zero::zero(),
 			..Default::default()
 		},
 		session: SessionConfig {

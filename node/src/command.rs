@@ -42,8 +42,12 @@ fn load_spec(
 	para_id: ParaId,
 ) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
 	Ok(match id {
-		"dev" => Box::new(chain_spec::development_config(para_id)?),
-		"" | "testnet" => Box::new(chain_spec::local_testnet_config(para_id)), // todo: from solo: default to running on testnet
+		"dev" => Box::new(chain_spec::development_config(para_id, "rococo-local")?),
+		"westend-dev" => Box::new(chain_spec::development_config(para_id, "westend-local")?),
+		"rococo-dev" => Box::new(chain_spec::development_config(para_id, "rococo-local")?),
+		"" | "testnet" => Box::new(chain_spec::local_testnet_config(para_id, "rococo-local")), // todo: from solo: default to running on testnet
+		"westend-testnet" => Box::new(chain_spec::local_testnet_config(para_id, "westend-local")), // todo: from solo: default to running on testnet
+		"rococo-testnet" => Box::new(chain_spec::local_testnet_config(para_id, "rococo-local")), // todo: from solo: default to running on testnet
 		path => Box::new(chain_spec::ChainSpec::from_json_file(
 			std::path::PathBuf::from(path),
 		)?),
