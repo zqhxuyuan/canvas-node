@@ -43,6 +43,7 @@ fn load_spec(
 ) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
 	Ok(match id {
 		"dev" => Box::new(chain_spec::development_config(para_id)?),
+		"rococo-dev" => Box::new(chain_spec::development_config(para_id)?),
 		"" | "testnet" => Box::new(chain_spec::local_testnet_config(para_id)), // todo: from solo: default to running on testnet
 		path => Box::new(chain_spec::ChainSpec::from_json_file(
 			std::path::PathBuf::from(path),
